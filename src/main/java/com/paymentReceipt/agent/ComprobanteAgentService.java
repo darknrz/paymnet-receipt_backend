@@ -8,11 +8,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MimeType;
+import org.springframework.util.MimeTypeUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
@@ -99,26 +107,34 @@ public class ComprobanteAgentService {
      */
     public AgentResult analizar(String textoComprobante) {
         log.info("Iniciando análisis de comprobante...");
+        return analizarConPrompt(
+                "Analiza el siguiente comprobante de pago y extrae la información:\n\n" + textoComprobante,
+                user -> {
+                }
+        );
+    }
+
+    /**
+     * Analiza una imagen de comprobante usando visión multimodal.
+     */
+    public AgentResult analizarImagen(MultipartFile archivo) {
+        log.info("Iniciando análisis de imagen de comprobante...");
 
         try {
-            String prompt = "Analiza el siguiente comprobante de pago y extrae la información:\n\n" + textoComprobante;
+            MimeType mimeType = resolverMimeType(archivo);
+            ByteArrayResource resource = new ByteArrayResource(archivo.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return archivo.getOriginalFilename();
+                }
+            };
 
-            String respuestaJson = chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
-                    .user(prompt)
-                    .call()
-                    .content();
-
-            log.debug("Respuesta del agent: {}", respuestaJson);
-
-            // Limpiar posibles backticks de markdown que el LLM pueda incluir
-            String jsonLimpio = limpiarJson(respuestaJson);
-
-            return objectMapper.readValue(jsonLimpio, AgentResult.class);
-
-        } catch (Exception e) {
-            log.error("Error al analizar comprobante", e);
-            throw new AgentException("No se pudo analizar el comprobante: " + e.getMessage(), e);
+            return analizarConPrompt(
+                    "Analiza la imagen del comprobante de pago y extrae la información estructurada.",
+                    user -> user.media(mimeType, resource)
+            );
+        } catch (IOException e) {
+            throw new AgentException("No se pudo leer la imagen del comprobante: " + e.getMessage(), e);
         }
     }
 
@@ -153,5 +169,37 @@ public class ComprobanteAgentService {
                 .replaceAll("^```\\s*", "")
                 .replaceAll("\\s*```$", "")
                 .trim();
+    }
+
+    private AgentResult analizarConPrompt(String prompt, Consumer<org.springframework.ai.chat.client.ChatClient.PromptUserSpec> customizadorUsuario) {
+        try {
+            String respuestaJson = chatClient.prompt()
+                    .system(SYSTEM_PROMPT)
+                    .user(user -> {
+                        user.text(prompt);
+                        customizadorUsuario.accept(user);
+                    })
+                    .call()
+                    .content();
+
+            log.debug("Respuesta del agent: {}", respuestaJson);
+
+            String jsonLimpio = limpiarJson(respuestaJson);
+            return objectMapper.readValue(jsonLimpio, AgentResult.class);
+        } catch (Exception e) {
+            log.error("Error al analizar comprobante", e);
+            throw new AgentException("No se pudo analizar el comprobante: " + e.getMessage(), e);
+        }
+    }
+
+    private MimeType resolverMimeType(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        if (contentType != null && !contentType.isBlank()) {
+            return MimeTypeUtils.parseMimeType(contentType);
+        }
+
+        return MediaTypeFactory.getMediaType(archivo.getOriginalFilename())
+                .map(mediaType -> MimeTypeUtils.parseMimeType(mediaType.toString()))
+                .orElse(MimeTypeUtils.parseMimeType(MediaType.IMAGE_JPEG_VALUE));
     }
 }

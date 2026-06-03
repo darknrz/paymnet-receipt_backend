@@ -32,7 +32,7 @@ SPRING_DATASOURCE_USERNAME=postgres
 SPRING_DATASOURCE_PASSWORD=change_me
 GROQ_API_KEY=tu_clave
 GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 ```
 
 ## Ejecucion local
@@ -83,6 +83,8 @@ docker compose -f compose.yaml up -d
 - `PATCH /api/comprobantes/{id}`
 - `DELETE /api/comprobantes/{id}`
 - `GET /api/comprobantes/insights`
+
+El endpoint `POST /api/chat/analizar` acepta `PDF`, texto plano e imágenes (`image/png`, `image/jpeg`, `image/webp`, entre otros). Las imágenes se envían al modelo multimodal para extraer los datos del comprobante. Para este flujo se requiere un modelo con soporte de visión, por ejemplo `meta-llama/llama-4-scout-17b-16e-instruct`.
 
 ## Respuesta estandar
 

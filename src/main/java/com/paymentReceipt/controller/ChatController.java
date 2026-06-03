@@ -43,7 +43,7 @@ public class ChatController {
     }
 
     /**
-     * Enviar mensaje con streaming SSE (bonus).
+     * Enviar mensaje con streaming SSE.
      * GET /api/chat/stream?mensaje=...
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

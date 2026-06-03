@@ -43,16 +43,12 @@ public class ComprobanteService {
     public ComprobanteResponse analizarYPersistir(MultipartFile archivo) throws IOException {
         log.info("Procesando comprobante: {}", archivo.getOriginalFilename());
 
-        // 1. Extraer texto del archivo
-        String textoExtraido = extractionService.extraerTexto(archivo);
+        AgentResult resultado = esImagen(archivo)
+                ? agentService.analizarImagen(archivo)
+                : agentService.analizar(extractionService.extraerTexto(archivo));
 
-        // 2. Llamar al Agent para análisis con IA
-        AgentResult resultado = agentService.analizar(textoExtraido);
-
-        // 3. Serializar el resultado raw para auditoría
         String rawJson = objectMapper.writeValueAsString(resultado);
 
-        // 4. Convertir a entidad y persistir
         Comprobante comprobante = mapper.fromAgentResult(resultado, archivo.getOriginalFilename(), rawJson);
         Comprobante guardado = repository.save(comprobante);
 
@@ -221,5 +217,27 @@ public class ComprobanteService {
         });
 
         return sb.toString();
+    }
+
+    private boolean esImagen(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        if (contentType != null && contentType.toLowerCase().startsWith("image/")) {
+            return true;
+        }
+
+        String nombreArchivo = archivo.getOriginalFilename();
+        if (nombreArchivo == null) {
+            return false;
+        }
+
+        String normalizado = nombreArchivo.toLowerCase();
+        return normalizado.endsWith(".png")
+                || normalizado.endsWith(".jpg")
+                || normalizado.endsWith(".jpeg")
+                || normalizado.endsWith(".webp")
+                || normalizado.endsWith(".gif")
+                || normalizado.endsWith(".bmp")
+                || normalizado.endsWith(".tif")
+                || normalizado.endsWith(".tiff");
     }
 }

@@ -15,7 +15,7 @@ public class ArchivoExtractionService {
 
     /**
      * Extrae texto de un archivo subido (PDF o texto plano).
-     * En una implementación completa, se podría agregar OCR para imágenes.
+     * Las imágenes se analizan directamente con el agente multimodal.
      */
     public String extraerTexto(MultipartFile archivo) throws IOException {
         String contentType = archivo.getContentType();
