@@ -2,15 +2,39 @@
 
 API REST del proyecto `payment-receipt`, desarrollada con Spring Boot. Expone endpoints para analizar comprobantes, guardar resultados, consultar historial del chat y obtener insights del sistema.
 
-## Tecnologias
+## Descripcion
+
+Este backend recibe texto, PDFs e imagenes de comprobantes. Luego orquesta la extraccion, el analisis con IA, el mapeo a entidades y la persistencia en PostgreSQL. Tambien expone endpoints para consulta, edicion y eliminacion de comprobantes, ademas del historial del chat.
+
+## Stack
 
 - Java 21
 - Spring Boot 4
-- Spring Web MVC / WebFlux
+- Spring Web MVC
 - Spring Data JPA
+- Spring AI
 - PostgreSQL
-- Spring AI con proveedor OpenAI compatible
-- Docker Compose
+- Maven Wrapper
+- Docker Compose para la base de datos
+
+## Arquitectura
+
+El proyecto sigue una arquitectura por capas:
+
+- `controller`: entrada HTTP y validacion basica.
+- `service`: logica de negocio y orquestacion.
+- `agent`: integracion con IA y analisis multimodal.
+- `model`: entidades, DTOs y enums.
+- `repository`: acceso a datos con JPA.
+- `exception`: manejo centralizado de errores.
+
+## Model
+
+La capa `model` contiene:
+
+- `entity`: `Comprobante`, `ItemComprobante`, `MensajeChat`.
+- `dto`: `ChatRequest`, `ChatResponse`, `ComprobanteResponse`, `InsightResponse`, entre otros.
+- `enum`: `TipoComprobante`, `EstadoComprobante`, `RolMensaje`.
 
 ## Requisitos
 
@@ -35,6 +59,8 @@ GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 ```
 
+Para analisis de imagenes se requiere un modelo con soporte de vision.
+
 ## Ejecucion local
 
 ```bash
@@ -49,18 +75,25 @@ mvnw.cmd spring-boot:run
 
 ## Base de datos con Docker
 
-El repositorio incluye `compose.yaml` para levantar PostgreSQL.
-
 ```bash
 docker compose -f compose.yaml up -d
 ```
 
-## Scripts utiles
+## Pruebas y build
 
 ```bash
 ./mvnw test
 ./mvnw clean package
 ```
+
+## Flujo principal
+
+1. El controller recibe la peticion.
+2. El service decide si debe analizar texto, PDF o imagen.
+3. El agent llama al modelo de IA.
+4. El resultado JSON se convierte a entidad.
+5. El repository persiste en PostgreSQL.
+6. El backend responde con un `ApiResponse<T>`.
 
 ## Endpoints
 
@@ -84,18 +117,36 @@ docker compose -f compose.yaml up -d
 - `DELETE /api/comprobantes/{id}`
 - `GET /api/comprobantes/insights`
 
-El endpoint `POST /api/chat/analizar` acepta `PDF`, texto plano e imágenes (`image/png`, `image/jpeg`, `image/webp`, entre otros). Las imágenes se envían al modelo multimodal para extraer los datos del comprobante. Para este flujo se requiere un modelo con soporte de visión, por ejemplo `meta-llama/llama-4-scout-17b-16e-instruct`.
+## Contrato de respuesta
 
-## Respuesta estandar
+La API responde con `ApiResponse<T>` para mantener consistencia entre casos exitosos y de error.
 
-La API responde con un envoltorio `ApiResponse<T>` para mantener consistencia entre exitos y errores.
+## Manejo de errores
+
+El proyecto usa `GlobalExceptionHandler` para centralizar:
+
+- comprobantes no encontrados
+- errores del agente de IA
+- validaciones de entrada
+- archivos demasiado grandes
+- errores inesperados
 
 ## Estructura
 
 - `src/main/java/com/paymentReceipt/controller/`: controladores REST.
 - `src/main/java/com/paymentReceipt/service/`: logica de negocio.
+- `src/main/java/com/paymentReceipt/agent/`: integracion con IA.
 - `src/main/java/com/paymentReceipt/model/`: entidades, DTOs y enums.
+- `src/main/java/com/paymentReceipt/repository/`: acceso a datos.
+- `src/main/java/com/paymentReceipt/exception/`: manejo de errores.
 - `src/main/resources/application.properties`: configuracion principal.
+
+## Notas de diseno
+
+- Se usa `@Transactional` para mantener consistencia al persistir comprobantes e historial.
+- Se separan DTOs y entidades para no exponer directamente el modelo interno.
+- La respuesta de IA se normaliza antes de mapearse al dominio.
+- El backend expone endpoints REST y usa una configuracion compatible con OpenAI/Groq.
 
 ## Compilacion
 
