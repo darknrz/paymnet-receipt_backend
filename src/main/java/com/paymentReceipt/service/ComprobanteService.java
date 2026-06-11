@@ -52,6 +52,10 @@ public class ComprobanteService {
                 log.warn("Texto extraído insuficiente ({}), intentando análisis visual...", texto.strip().length());
                 resultado = agentService.analizarImagen(archivo);
             } else {
+                if (texto.length() > 4000) {
+                    log.warn("Texto demasiado largo ({}), truncando a 4000 chars", texto.length());
+                    texto = texto.substring(0, 4000);
+                }
                 resultado = agentService.analizar(texto);
             }
         }

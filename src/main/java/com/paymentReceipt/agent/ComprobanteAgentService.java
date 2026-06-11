@@ -16,6 +16,11 @@ import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -121,8 +126,8 @@ public class ComprobanteAgentService {
         log.info("Iniciando análisis de imagen de comprobante...");
 
         try {
-            MimeType mimeType = resolverMimeType(archivo);
-            ByteArrayResource resource = new ByteArrayResource(archivo.getBytes()) {
+            byte[] bytes = comprimirImagen(archivo.getBytes());
+            ByteArrayResource resource = new ByteArrayResource(bytes) {
                 @Override
                 public String getFilename() {
                     return archivo.getOriginalFilename();
@@ -131,11 +136,41 @@ public class ComprobanteAgentService {
 
             return analizarConPrompt(
                     "Analiza la imagen del comprobante de pago y extrae la información estructurada.",
-                    user -> user.media(mimeType, resource)
+                    user -> user.media(MimeTypeUtils.IMAGE_JPEG, resource)
             );
         } catch (IOException e) {
             throw new AgentException("No se pudo leer la imagen del comprobante: " + e.getMessage(), e);
         }
+    }
+
+    private byte[] comprimirImagen(byte[] original) throws IOException {
+        BufferedImage img = ImageIO.read(new ByteArrayInputStream(original));
+        if (img == null) return original;
+
+        int maxDim = 1024;
+        int w = img.getWidth();
+        int h = img.getHeight();
+
+        if (w <= maxDim && h <= maxDim) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "jpg", baos);
+            return baos.toByteArray();
+        }
+
+        double scale = Math.min((double) maxDim / w, (double) maxDim / h);
+        int nw = (int) (w * scale);
+        int nh = (int) (h * scale);
+
+        BufferedImage resized = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resized.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(img, 0, 0, nw, nh, null);
+        g.dispose();
+
+        log.info("Imagen comprimida de {}x{} a {}x{}", w, h, nw, nh);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(resized, "jpg", baos);
+        return baos.toByteArray();
     }
 
     /**
