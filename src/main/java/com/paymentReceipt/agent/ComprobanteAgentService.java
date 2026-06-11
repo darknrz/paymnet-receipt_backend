@@ -16,6 +16,8 @@ import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -146,31 +148,69 @@ public class ComprobanteAgentService {
     private byte[] comprimirImagen(byte[] original) throws IOException {
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(original));
         if (img == null) return original;
+        return comprimirImagen(img);
+    }
 
+    private byte[] comprimirImagen(BufferedImage img) throws IOException {
         int maxDim = 1024;
         int w = img.getWidth();
         int h = img.getHeight();
 
-        if (w <= maxDim && h <= maxDim) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(img, "jpg", baos);
-            return baos.toByteArray();
+        BufferedImage destino = img;
+        if (w > maxDim || h > maxDim) {
+            double scale = Math.min((double) maxDim / w, (double) maxDim / h);
+            int nw = (int) (w * scale);
+            int nh = (int) (h * scale);
+            destino = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = destino.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(img, 0, 0, nw, nh, null);
+            g.dispose();
+            log.info("Imagen redimensionada de {}x{} a {}x{}", w, h, nw, nh);
+        } else if (destino.getType() != BufferedImage.TYPE_INT_RGB) {
+            BufferedImage rgb = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = rgb.createGraphics();
+            g.drawImage(destino, 0, 0, null);
+            g.dispose();
+            destino = rgb;
         }
 
-        double scale = Math.min((double) maxDim / w, (double) maxDim / h);
-        int nw = (int) (w * scale);
-        int nh = (int) (h * scale);
-
-        BufferedImage resized = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = resized.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(img, 0, 0, nw, nh, null);
-        g.dispose();
-
-        log.info("Imagen comprimida de {}x{} a {}x{}", w, h, nw, nh);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ImageIO.write(resized, "jpg", baos);
+        ImageIO.write(destino, "jpg", baos);
         return baos.toByteArray();
+    }
+
+    /**
+     * Renderiza la primera página del PDF como imagen y la analiza con visión multimodal.
+     * Usar cuando PDFBox no extrae texto (PDF escaneado o basado en imagen).
+     */
+    public AgentResult analizarPdfComoImagen(MultipartFile archivo) {
+        log.info("Convirtiendo PDF escaneado a imagen para análisis visual...");
+        try {
+            byte[] imagenBytes = renderizarPdfAImagen(archivo.getBytes());
+            ByteArrayResource resource = new ByteArrayResource(imagenBytes) {
+                @Override
+                public String getFilename() {
+                    return "pagina.jpg";
+                }
+            };
+            return analizarConPrompt(
+                    "Analiza la imagen del comprobante de pago y extrae la información estructurada.",
+                    user -> user.media(MimeTypeUtils.IMAGE_JPEG, resource)
+            );
+        } catch (IOException e) {
+            throw new AgentException("No se pudo convertir el PDF a imagen: " + e.getMessage(), e);
+        }
+    }
+
+    private byte[] renderizarPdfAImagen(byte[] pdfBytes) throws IOException {
+        try (PDDocument document = PDDocument.load(new ByteArrayInputStream(pdfBytes))) {
+            PDFRenderer renderer = new PDFRenderer(document);
+            BufferedImage imagen = renderer.renderImageWithDPI(0, 150);
+            byte[] comprimida = comprimirImagen(imagen);
+            log.info("PDF renderizado a imagen ({} bytes)", comprimida.length);
+            return comprimida;
+        }
     }
 
     /**

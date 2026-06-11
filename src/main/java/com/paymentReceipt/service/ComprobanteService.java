@@ -49,8 +49,8 @@ public class ComprobanteService {
         } else {
             String texto = extractionService.extraerTexto(archivo);
             if (texto.isBlank() || texto.strip().length() < 30) {
-                log.warn("Texto extraído insuficiente ({}), intentando análisis visual...", texto.strip().length());
-                resultado = agentService.analizarImagen(archivo);
+                log.warn("Texto extraído insuficiente ({}), renderizando PDF como imagen...", texto.strip().length());
+                resultado = agentService.analizarPdfComoImagen(archivo);
             } else {
                 if (texto.length() > 4000) {
                     log.warn("Texto demasiado largo ({}), truncando a 4000 chars", texto.length());
