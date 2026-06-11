@@ -43,9 +43,18 @@ public class ComprobanteService {
     public ComprobanteResponse analizarYPersistir(MultipartFile archivo) throws IOException {
         log.info("Procesando comprobante: {}", archivo.getOriginalFilename());
 
-        AgentResult resultado = esImagen(archivo)
-                ? agentService.analizarImagen(archivo)
-                : agentService.analizar(extractionService.extraerTexto(archivo));
+        AgentResult resultado;
+        if (esImagen(archivo)) {
+            resultado = agentService.analizarImagen(archivo);
+        } else {
+            String texto = extractionService.extraerTexto(archivo);
+            if (texto.isBlank() || texto.strip().length() < 30) {
+                log.warn("Texto extraído insuficiente ({}), intentando análisis visual...", texto.strip().length());
+                resultado = agentService.analizarImagen(archivo);
+            } else {
+                resultado = agentService.analizar(texto);
+            }
+        }
 
         String rawJson = objectMapper.writeValueAsString(resultado);
 

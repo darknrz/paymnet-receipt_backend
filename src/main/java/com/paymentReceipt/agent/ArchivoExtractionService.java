@@ -30,11 +30,8 @@ public class ArchivoExtractionService {
         } else if (nombreArchivo != null && nombreArchivo.toLowerCase().endsWith(".pdf")) {
             return extraerTextoPDF(archivo);
         } else {
-            // Para imágenes o formatos no soportados directamente,
-            // retornamos metadata para que el agent intente con lo que tenga
-            log.warn("Tipo de archivo no soportado para extracción directa: {}", contentType);
-            return "Archivo: " + nombreArchivo + " (tipo: " + contentType + ") - No se pudo extraer texto directamente. " +
-                   "Por favor, proporcione el contenido del comprobante como texto.";
+            log.warn("Tipo de archivo no soportado para extracción de texto: {}", contentType);
+            return "";
         }
     }
 
